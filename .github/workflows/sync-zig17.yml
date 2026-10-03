@@ -1,0 +1,40 @@
+name: Sync Zig 0.17 source from Codeberg
+
+on:
+  schedule:
+    - cron: "25 5 * * *"
+      timezone: "America/Chicago"
+  workflow_dispatch: {}
+
+permissions: {}
+
+concurrency:
+  group: sync-zig17-from-codeberg
+  cancel-in-progress: false
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: mirror
+
+      - name: Sync the pinned Zig 0.17 commit
+        env:
+          UPSTREAM_COMMIT: d0c8c4d9c55daa7ef6e40cf0f630a5b5e900989b
+        run: |
+          set -euo pipefail
+          previous=$(git ls-remote --refs origin refs/heads/zig17 | cut -f1)
+          previous=${previous:-0000000000000000000000000000000000000000}
+          git remote add upstream https://codeberg.org/ziglang/arocc.git
+          timeout --kill-after=30s 10m \
+            git -c protocol.version=0 fetch --no-tags upstream "$UPSTREAM_COMMIT"
+          test "$(git rev-parse FETCH_HEAD)" = "$UPSTREAM_COMMIT"
+          git push \
+            --force-with-lease="refs/heads/zig17:${previous}" \
+            origin FETCH_HEAD:refs/heads/zig17
+          git show --no-patch --format=fuller FETCH_HEAD
